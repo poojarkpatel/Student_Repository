@@ -7,6 +7,7 @@ from prettytable import PrettyTable
 from HW08_Pooja_Patel import file_reader
 import os
 import sys
+import sqlite3
 
 class Student:
     """
@@ -92,28 +93,38 @@ class Major:
 
 class Repository:
     """Store all students, instructors for a university and print pretty tables"""
+    # DB_FILE: str = "/Applications/DataGrip.app/Contents/bin/Student_Repository.db"
+    # db: sqlite3.Connection = sqlite3.connect(DB_FILE)
+    # for row in db.execute("select * from students"):
+    #    print(row)
 
-    def __init__(self, path: str) -> None:
+
+    def __init__(self, path: str,db_path: str) -> None:
         """ init function of class repository"""
         self._path: str = path
+        self.db_path = db_path
         self._students: Dict[str, Student] = dict()
         self._instructors: Dict[str, Instructor] = dict()
         self._inst: Dict[str, Instructor] = dict()
         self._majors: Dict[str, Major] = dict()
-
-        self._read_majors(self._path)
-        self._read_students(self._path)
-        self._read_instructors(self._path)
-        self._read_grades(self._path)
+        try:
+            self._read_majors(self._path)
+            self._read_students(self._path)
+            self._read_instructors(self._path)
+            self._read_grades(self._path)
+            self.new_student_grades_table_db(self.db_path)
+        except ValueError as e:
+            print(e)
 
         self.student_pretty_table()
         self.instructor_pretty_table()
         self.majors_pretty_table()
 
+
     def _read_majors(self, path: str) -> None:
         """ read student_cwid, course, grade, instructor_cwid """
         try:
-            for major, subject_type, course in file_reader(os.path.join(self._path, 'majors.txt'), 3, "\t", True):
+            for major, subject_type, course in file_reader(os.path.join(self._path, 'Majors.txt'), 3, "\t", True):
                 if major not in self._majors.keys():
                     self._majors[major] = Major(major)
                 self._majors[major].add_course(subject_type,course)
@@ -125,9 +136,12 @@ class Repository:
     def _read_students(self, path: str) -> None:
         """read each line from path/students.txt and create instance of class student"""
         try:
-            for cwid, name, major in file_reader(os.path.join(self._path, 'students.txt'), 3, ";",True):
-                required, elective = self._majors[major].info()
-                self._students[cwid] = Student(cwid, name, major,required,elective)
+            for cwid, name, major in file_reader(os.path.join(self._path, 'Students.txt'), 3, "\t", True):
+                if major not in self._majors:
+                    print(f"Student {cwid} '{name}' has Unknown major {major}")
+                else:
+                    required, elective = self._majors[major].info()
+                    self._students[cwid] = Student(cwid, name, major,required,elective)
         except (FileNotFoundError, ValueError) as e:
             print(e)
             sys.exit()
@@ -135,7 +149,7 @@ class Repository:
     def _read_instructors(self, path: str) -> None:
         """read each line from path/instructors.txt and create instance of class student"""
         try:
-            for cwid, name, dept in file_reader(os.path.join(self._path, 'instructors.txt'), 3, "|",True):
+            for cwid, name, dept in file_reader(os.path.join(self._path, 'Instructor.txt'), 3, "\t", True):
                 self._instructors[cwid] = Instructor(cwid, name, dept)
         except (FileNotFoundError, ValueError) as e:
             print(e)
@@ -144,7 +158,7 @@ class Repository:
     def _read_grades(self, path: str) -> None:
         """ read student_cwid, course, grade, instructor_cwid """
         try:
-            for cwid, major, grade, instructor_cwid in file_reader(os.path.join(self._path, 'grades.txt'), 4, "|",True):
+            for cwid, major, grade, instructor_cwid in file_reader(os.path.join(self._path, 'Grades.txt'), 4, "\t", True):
 
                 if cwid not in self._students.keys():
                     print(f"{cwid}is Unknown cwid. No such student found")
@@ -167,7 +181,7 @@ class Repository:
             pt.add_row(stu.info())
         print(pt)
 
-    def instructor_pretty_table(self) -> None:
+    def instructor_pretty_table(self) -> Dict:
         """ print pretty table of instructors """
         d: Dict[str, Dict[str, any]] = dict()
         pt = PrettyTable(field_names=Instructor.PT_FIELD_NAMES)
@@ -184,7 +198,7 @@ class Repository:
         print(pt)
         return d
 
-    def majors_pretty_table(self) :
+    def majors_pretty_table(self) -> List:
         """ print pretty table of majors """
         pt = PrettyTable(field_names=Major.PT_FIELD_NAMES)
         l: List = list()
@@ -192,8 +206,23 @@ class Repository:
             required_electives_list = self._majors[major].info()
             pt.add_row([major, required_electives_list[0], required_electives_list[1]])
             l.append([major, sorted(required_electives_list[0]), sorted(required_electives_list[1])])
+        print(pt)
         return sorted(l)
+
+    def new_student_grades_table_db(self, db_path) -> List[Tuple]:
+        """
+         Adds new table to database
+        """
+        db: sqlite3.Connection = sqlite3.connect(self.db_path)
+        query = "Select s.Name as Name,s.CWID,g.Course,g.Grade,I.Name as Instructor from students s join Grades g on s.CWID = g.StudentCWID join Instructor I on g.InstructorCWID = I.CWID order by s.Name ASC"
+        pt = PrettyTable(["Name", "CWID", "Course", "Grade", "Instructor"])
+        student: List[tuple] = list()
+        for row in db.execute(query):
+            student.append(row)
+            pt.add_row(list(row))
+        print(pt)
+        return student
 
 if __name__ == "__main__":
     """ main function"""
-    stevens: Repository = Repository("/Users/poojapatel/PycharmProjects/HW10/stevens")
+    stevens: Repository = Repository("/Users/poojapatel/PycharmProjects/Student_Repository/stevens", "/Applications/DataGrip.app/Contents/bin/Student_Repository.db")
