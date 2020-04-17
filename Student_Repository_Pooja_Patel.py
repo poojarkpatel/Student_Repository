@@ -1,6 +1,8 @@
 """
-HW10
+HW12
 """
+from flask import Flask, render_template
+
 from typing import Dict, DefaultDict, List,Tuple,Set
 from collections import defaultdict
 from prettytable import PrettyTable
@@ -8,6 +10,9 @@ from HW08_Pooja_Patel import file_reader
 import os
 import sys
 import sqlite3
+
+app = Flask(__name__)
+app.debug = True
 
 class Student:
     """
@@ -223,6 +228,28 @@ class Repository:
         print(pt)
         return student
 
+@app.route('/completed')
+def completed_courses() -> str:
+    """ displays a desired table on web page using flask """
+    db: sqlite3.Connection = sqlite3.connect("/Applications/DataGrip.app/Contents/bin/Student_Repository.db")
+    query = """
+             select s.Name,s.CWID,g.Course,g.Grade,I.name from students s
+             join Grades g ON g.StudentCWID = s.CWID
+             join Instructor I ON I.CWID = g.InstructorCWID
+             ORDER BY s.Name ASC
+             """
+    data: Dict[str, str] = \
+          [{'name': name, 'cwid': cwid,'course': course, 'grade': grade, 'instructor': instructor}
+                for name, cwid, course, grade, instructor in db.execute(query)]
+    db.close()
+
+    return render_template('Template.html',
+                            title = 'Stevens Repository',
+                            table_title = 'Student, Course, Grade, and Instructor',
+                            students = data)
+
+
 if __name__ == "__main__":
     """ main function"""
     stevens: Repository = Repository("/Users/poojapatel/PycharmProjects/Student_Repository/stevens", "/Applications/DataGrip.app/Contents/bin/Student_Repository.db")
+    app.run(port=8000)
